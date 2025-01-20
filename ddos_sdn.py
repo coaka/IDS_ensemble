@@ -10,7 +10,7 @@ from sklearn.metrics  import  recall_score
 from sklearn  import  metrics
 from sklearn.metrics import precision_score
 from sklearn.metrics import f1_score
-import seaborn as sns
+#import seaborn as sns
 import os
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.tree import DecisionTreeClassifier
@@ -23,7 +23,7 @@ import pickle
 import operator
 import matplotlib.pyplot as plt
 from matplotlib.pyplot import figure
-import metrics
+#import metrics
 #TODO: find other metrics (Done), add more datasets, pruning during sending to Minor node.
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
@@ -48,16 +48,9 @@ print(X_train.size, y_train.size)
 ######################################################################
 train_data=X_train #pd.read_csv('archive/nsl-kdd/KDDTrain+.txt',names=feature)
 test_data=X_test  #pd.read_csv('archive/nsl-kdd/KDDTest+.txt',names=feature)
-#train_data.drop(['difficulty_level'],axis=1,inplace=True)
-#test_data.drop(['difficulty_level'],axis=1,inplace=True)
-#train_attack = train_data.attack.map(lambda a: 0 if a == 'normal' else 1)
-#test_attack = test_data.attack.map(lambda a: 0 if a == 'normal' else 1)
+
 print("Testttttttttt", test_data.shape, train_data.shape)
-#print(test_data.iloc[1000])
-#train_data['attack_state'] = train_attack
-#test_data['attack_state'] = test_attack
-#test_data.drop(['attack'],axis=1,inplace=True)
-#train_data.drop(['attack'],axis=1,inplace=True)
+
 std_scaler = StandardScaler()
 def standardization(df,col):
     for i in col:
@@ -65,30 +58,7 @@ def standardization(df,col):
         arr = np.array(arr)
         df[i] = std_scaler.fit_transform(arr.reshape(len(arr),1))
     return df
-#numeric_col_train = train_data.select_dtypes(include='number').columns
-#numeric_col_test = test_data.select_dtypes(include='number').columns
-#trainlabel=train_data["attack_state"]
-#train_data.drop("attack_state", axis=1)
-#testlabel=test_data["attack_state"]
-#test_data.drop("attack_state", axis=1)
-#train_data = standardization(train_data,numeric_col_train)
-#test_data = standardization(test_data,numeric_col_test)
-#train_data["attack_state"]=trainlabel
-#test_data["attack_state"]=testlabel
-#train_data = train_data[train_data.service != "red_i"]
-#train_data = train_data[train_data.service != "urh_i"]
-#train_data = train_data[train_data.service != "http_8001"]
-#train_data = train_data[train_data.service !="aol"]
-#train_data = train_data[train_data.service != "http_2784"]
-#train_data = train_data[train_data.service != "harvest"]
-#train_data = pd.get_dummies(train_data,columns=['protocol_type','service','flag'],prefix="",prefix_sep="")
-#test_data = pd.get_dummies(test_data,columns=['protocol_type','service','flag'],prefix="",prefix_sep="")
 
-#y_train = y_train#train_data["attack_state"]
-#X_train = train_data.drop("attack_state", axis=1)
-#print('X_train shape:',X_train.shape,'\ny_train shape:',y_train.shape)
-#y_test = test_data["attack_state"]
-#X_test = test_data.drop("attack_state", axis=1)
 print('X_test shape:',X_test.shape,'\ny_test has shape:',y_test.shape)
 def printScore(expected, predicted, model_name):
     accuracy = accuracy_score(expected, predicted)
