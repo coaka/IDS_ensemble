@@ -1,9 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Sun Sep 15 10:52:02 2024
-
-@author: Asus
-"""
 
 import numpy as np
 import pandas as pd
@@ -39,7 +33,7 @@ from tensorflow.keras import layers
 from sklearn import metrics
 from sklearn import linear_model
 import matplotlib.pyplot as plt
-
+from tensorflow.keras.models import load_model
 from keras.callbacks import ModelCheckpoint,EarlyStopping
 ###########
 from sklearn.metrics  import  recall_score
@@ -48,47 +42,149 @@ from sklearn.metrics import f1_score
 from sklearn.metrics import accuracy_score
 from sklearn  import  metrics
 
-# from tensorflow.keras.layers import Input, Conv1D, BatchNormalization, ReLU, Add, Dense, GlobalAveragePooling1D
+path='CICIDS2017/'
+# import os
+# os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"   # see issue #152
+# os.environ["CUDA_VISIBLE_DEVICES"] = ""
+# if tf.config.list_physical_devices('GPU'):
+#     physical_devices = tf.config.list_physical_devices('GPU')
+#     tf.config.experimental.set_memory_growth(physical_devices[0], enable=True)
+#     tf.config.experimental.set_virtual_device_configuration(physical_devices[0], [tf.config.experimental.VirtualDeviceConfiguration(memory_limit=4000)])
 
+from tensorflow.keras.layers import Layer
 
-path='/content/drive/MyDrive/'
+class CustomMaskLayer(Layer):
+    def __init__(self, custom_parameter=1.0, **kwargs):
+        super(CustomMaskLayer, self).__init__(**kwargs)
+        self.custom_parameter = custom_parameter
+
+    def call(self, inputs):
+        # Implement the layer's forward pass
+        return inputs * self.custom_parameter
+
+    def compute_mask(self, inputs, mask=None):
+        # Implement custom masking if necessary
+        return mask
+
+    def get_config(self):
+        # This is required for saving the model with the custom layer
+        config = super(CustomMaskLayer, self).get_config()
+        config.update({
+            "custom_parameter": self.custom_parameter
+        })
+        return config
+
+# Example usage
+layer = CustomMaskLayer(custom_parameter=0.5)
+
+# Loading the model with custom layer
+feature_extraction_model = load_model('best_model_20.h5', custom_objects={'CustomMaskLayer': CustomMaskLayer})
+
+def printScore(expected, predicted):
+    #expected=expected.argmax(axis=0)
+    #predicted=predicted.argmax(axis=0)
+    accuracy = accuracy_score(expected, predicted)
+    recall = recall_score(expected, predicted, average='micro')
+    precision = precision_score(expected, predicted , average='micro')
+    f1 = f1_score(expected, predicted , average='micro')
+    fpr, tpr, thresholds = metrics.roc_curve(expected, predicted)
+    auc = metrics.roc_auc_score(expected, predicted,  average='micro')
+    print('Results of RESNET model in NSL dataset with Classifier')
+    print("Accuracy -->",accuracy)
+    print("Precision -->",precision)
+    print("Recall -->",recall)
+    print("F-Score -->",f1)
+    print("AUC -->", auc)
+    # Open the file in append mode to add results
+    #file.write(f"Iteration {i+1}:\n")
+    with open(file_name, "a") as file:
+        file.write(f"Accuracy: {accuracy:.4f} \n")
+        file.write(f"Precision: {precision:.4f} \n")
+        file.write(f"Recall: {recall:.4f} \n")
+        file.write(f"F1: {f1:.4f}\n ")
+        file.write(f"AUC: {auc:.4f} \n \n")
+# Function to create a residual block
+def residual_block(x, filters, strides,kernel_size=3 ):
+    shortcut = x
+    x = Conv1D(filters, kernel_size, padding='same', strides=strides)(x)
+    x = BatchNormalization()(x)
+    x = ReLU()(x)
+    
+    x = Conv1D(filters, kernel_size, padding='same', strides=1)(x)
+    x = BatchNormalization()(x)
+    
+    if strides != 1:
+        shortcut = Conv1D(filters, kernel_size=1, strides=strides, padding='same')(shortcut)
+    
+    x = Add()([x, shortcut])
+    x = ReLU()(x)
+    return x
+
+# def residual_block(input_tensor, filters):
+#   """
+#   A single residual block.
+#   """
+#   shortcut = input_tensor
+
+#   x = Conv1D(filters, kernel_size=3, strides=2, padding='same')(input_tensor)
+#   # x = Conv1D(filters, kernel_size=3, strides=1, padding='same')
+#   x = BatchNormalization()(x)
+#   x = ReLU()(x)
+
+#   x = Conv1D(filters, kernel_size=3, strides=2, padding='same')(x)
+#   # x = Conv1D(filters, kernel_size=3, strides=1, padding='same')(x)
+#   x = BatchNormalization()(x)
+
+#   # Add the shortcut connection
+#   x = Add()([x, shortcut])
+#   x = ReLU()(x)
+
+#   return x
+
+# Load the CICIDS2017 dataset
 
 df = pd.DataFrame()
-
-feature=["duration","protocol_type","service","flag","src_bytes","dst_bytes","land","wrong_fragment","urgent","hot",
-          "num_failed_logins","logged_in","num_compromised","root_shell","su_attempted","num_root","num_file_creations","num_shells",
-          "num_access_files","num_outbound_cmds","is_host_login","is_guest_login","count","srv_count","serror_rate","srv_serror_rate",
-          "rerror_rate","srv_rerror_rate","same_srv_rate","diff_srv_rate","srv_diff_host_rate","dst_host_count","dst_host_srv_count",
-          "dst_host_same_srv_rate","dst_host_diff_srv_rate","dst_host_same_src_port_rate","dst_host_srv_diff_host_rate","dst_host_serror_rate",
-          "dst_host_srv_serror_rate","dst_host_rerror_rate","dst_host_srv_rerror_rate","attack","difficulty_level"]
+for dirname, _, filenames in os.walk('CICIDS2017'):
+    for filename in filenames:
+        if filename.endswith('.csv'):
+            print('Reading dataset files...')#os.path.join(dirname, filename))
+            df1 = pd.read_csv('CICIDS2017/'+filename)
+            df = pd.concat([df, df1])
+            del df1
           
-print("feature", len(feature))
+pd.set_option('display.max_columns', None)
+pd.set_option('display.max_rows', None)
+nRow, nCol = df.shape
 
-train=pd.read_csv('archive/nsl-kdd/KDDTrain+.txt',names=feature)
-test=pd.read_csv('archive/nsl-kdd/KDDTest+.txt',names=feature)
 
-train.drop(['difficulty_level'],axis=1,inplace=True)
-test.drop(['difficulty_level'],axis=1,inplace=True)
+# df = df[:989757]
+# df = df[989755:]
 
-train_attack = train.attack.map(lambda a: 0 if a == 'normal' else 1)
-test_attack = test.attack.map(lambda a: 0 if a == 'normal' else 1)
-print("Testttttttttt", test.shape, train.shape)
-#############
-#print(test_data.iloc[1000])
-train['attack_state'] = train_attack
-test['attack_state'] = test_attack
-test.drop(['attack'],axis=1,inplace=True)
-train.drop(['attack'],axis=1,inplace=True)
-std_scaler = StandardScaler()
+# df=df[:550000]
+# df=df[550000:1100000]
+# df=df[1100000:1650000]
+# df=df[1650000:2200000]
+# df=df[2200000:]
+#####################
+#print(df.columns)
+plt.style.use('ggplot')
+
+# Convert labels to one-hot encoding
+df = df.dropna()
+#print(print(df. info()))
+from sklearn.impute import SimpleImputer
+
+imp_mean = SimpleImputer(missing_values=np.nan, strategy='mean')
 
 #imp_mean.fit(df)
-#print(test.columns)
+
 #df = imp_mean.transform(df)
-#df_new = df[np.isfinite(df.iloc[:, :-1]).all(1)]
-#train, test=train_test_split(df_new,test_size=0.3, random_state=10)
+df_new = df[np.isfinite(df.iloc[:, :-1]).all(1)]
+print(f'Tabel of rows {nRow} No. of {nCol} colom')
+train, test=train_test_split(df_new,test_size=0.3, random_state=10)
 #print(df_new.head())
 #train.describe()
-#test.describe()
+test.describe()
 missing_values_train = train.select_dtypes(include=['float64', 'int64']).isnull().sum()
 missing_values_test = test.select_dtypes(include=['float64', 'int64']).isnull().sum()
 numeric_cols_train=[]
@@ -96,7 +192,7 @@ numeric_cols_test=[]
 if missing_values_train.any() or missing_values_test.any():
     # Handle missing values (imputation or removal)
     # For example, you can use imputation:
-    numeric_cols_train = train_data.select_dtypes(include=['float64', 'int64']).columns
+    numeric_cols_train = train.select_dtypes(include=['float64', 'int64']).columns
     print('numeric_cols_train->',numeric_cols_train)
     train[numeric_cols_train] = train[numeric_cols_train].fillna(train[numeric_cols_train].mean())
     numeric_cols_test = test.select_dtypes(include=['float64', 'int64']).columns
@@ -122,12 +218,14 @@ sc_test = scaler.transform(test.select_dtypes(include=['float64', 'int64']))
 
 # Convert labels to one-hot encoding
 onehotencoder = OneHotEncoder()
-trainDep = train['attack_state'].values.reshape(-1, 1)
+trainDep = train[' Label'].values.reshape(-1, 1)
 trainDep = onehotencoder.fit_transform(trainDep).toarray()
-testDep = test['attack_state'].values.reshape(-1, 1)
+testDep = test[' Label'].values.reshape(-1, 1)
 testDep = onehotencoder.fit_transform(testDep).toarray()
+
+print("Data before PCA", train.shape)
 # Prepare data for PCA
-num_components = 30
+num_components = 70
 pca = PCA(n_components=num_components)
 # Fit and transform the training data
 train_X_pca = pca.fit_transform(sc_train)
@@ -155,7 +253,7 @@ X_test = X_test.reshape((nsamples,nx*ny))
 ######################################################################
 train_data=X_train #pd.read_csv('archive/nsl-kdd/KDDTrain+.txt',names=feature)
 test_data=X_test  #pd.read_csv('archive/nsl-kdd/KDDTest+.txt',names=feature)
-##################
+print("Data after PCA", X_train.shape)
 #################################################################
 print(X_train.shape)
 print(y_train.shape)
@@ -166,47 +264,11 @@ print(y_test.shape)
 #X_train = scaler.fit_transform(X_train.reshape(-1, X_train.shape[1])).reshape(X_train.shape)
 #X_test = scaler.transform(X_test.reshape(-1, X_test.shape[1])).reshape(X_test.shape)
 #####################
-def printScore(expected, predicted):
-    #expected=expected.argmax(axis=0)
-    #predicted=predicted.argmax(axis=0)
-    accuracy = accuracy_score(expected, predicted)
-    recall = recall_score(expected, predicted, average='micro')
-    precision = precision_score(expected, predicted , average='micro')
-    f1 = f1_score(expected, predicted , average='micro')
-    fpr, tpr, thresholds = metrics.roc_curve(expected, predicted)
-    auc = metrics.roc_auc_score(expected, predicted,  average='micro')
-    print('Results of RESNET model in NSL dataset with Classifier')
-    print("Accuracy -->",accuracy)
-    print("Precision -->",precision)
-    print("Recall -->",recall)
-    print("F-Score -->",f1)
-    print("AUC -->", auc)
-    # Open the file in append mode to add results
-    #file.write(f"Iteration {i+1}:\n")
-    with open(file_name, "a") as file:
-        file.write(f"Accuracy: {accuracy:.4f} \n")
-        file.write(f"Precision: {precision:.4f} \n")
-        file.write(f"Recall: {recall:.4f} \n")
-        file.write(f"F1: {f1:.4f}\n ")
-        file.write(f"AUC: {auc:.4f} \n \n")
-# Function to create a residual block
-##########
+import keras
+# from keras.optimizers import Adagrad AdamW
+# optimizer = keras.optimizers.RMSprop(learning_rate=0.0001)
+optimizer = keras.optimizers.Adam(learning_rate=0.0001)
 ############################### model
-def residual_block(x, filters, kernel_size=3, strides=1):
-    shortcut = x
-    x = Conv1D(filters, kernel_size, padding='same', strides=strides)(x)
-    x = BatchNormalization()(x)
-    x = ReLU()(x)
-    
-    x = Conv1D(filters, kernel_size, padding='same', strides=1)(x)
-    x = BatchNormalization()(x)
-    
-    if strides != 1:
-        shortcut = Conv1D(filters, kernel_size=1, strides=strides, padding='same')(shortcut)
-    
-    x = Add()([x, shortcut])
-    x = ReLU()(x)
-    return x
 ####################
 # Build the ResNet-like model using 1D convolutions
 def RESNET_():
@@ -271,39 +333,10 @@ classifier3 = DecisionTreeClassifier(
     )
 ##############################
 ##################
-# file = open("results_nodes.txt", "a")
-import keras
-# from keras.optimizers import Adagrad AdamW
-# optimizer = keras.optimizers.RMSprop(learning_rate=0.0001)
-optimizer = keras.optimizers.Adam(learning_rate=0.0001)
 ######################
-file_name="metrics_results_NSL_f30_v1.txt"
+file_name="metrics_results_CICIDS2017_70 FEATURES_5 DEVICES.txt"
 with open(file_name, "a") as file:
-    file.write("Results of NSL dataset with Resnet only \n")  # 
-
-
-from tensorflow.keras.layers import Layer
-from tensorflow.keras.models import load_model
-class CustomMaskLayer(Layer):
-    def __init__(self, custom_parameter=1.0, **kwargs):
-        super(CustomMaskLayer, self).__init__(**kwargs)
-        self.custom_parameter = custom_parameter
-
-    def call(self, inputs):
-        # Implement the layer's forward pass
-        return inputs * self.custom_parameter
-
-    def compute_mask(self, inputs, mask=None):
-        # Implement custom masking if necessary
-        return mask
-
-    def get_config(self):
-        # This is required for saving the model with the custom layer
-        config = super(CustomMaskLayer, self).get_config()
-        config.update({
-            "custom_parameter": self.custom_parameter
-        })
-        return config
+    file.write("Results of CICIDS2017 dataset with Resnet only \n")  # 
 layer = CustomMaskLayer(custom_parameter=0.5)
 nodes=5
 for i in range(nodes):
@@ -322,7 +355,7 @@ for i in range(nodes):
  resnet_model.compile(loss='binary_crossentropy', optimizer=optimizer, metrics=['accuracy'])
 
 #####################
- ckpt_model='best_model_device_NSL_oversampling_30f_v1_'+str(i)+'.h5'
+ ckpt_model='best_model_device_CICIDS2017_oversampling_70f_'+str(i)+'.h5'
  checkpoint= ModelCheckpoint(ckpt_model,
                              monitor='val_accuracy',
                              save_best_only=True,
@@ -334,13 +367,20 @@ for i in range(nodes):
  history = resnet_model.fit(X_train[start:end],
  y_train[start:end], validation_data=(X_test[start_test:end_test],y_test[start_test:end_test]),epochs=50
  ,batch_size=256,callbacks=[checkpoint, es])#callbacks=[checkpoint, es]
- resnet_model = load_model('best_model_device_NSL_oversampling_30f_v1_'+str(i)+'.h5',custom_objects={'CustomMaskLayer': CustomMaskLayer})
+ 
+ # Example usage
+ 
+
+ # Loading the model with custom layer
+ resnet_model = load_model('best_model_device_CICIDS2017_oversampling_70f_'+str(i)+'.h5',custom_objects={'CustomMaskLayer': CustomMaskLayer})
+
+ # resnet_model = load_model('best_model_device_CICIDS2017_oversampling_70f_'+str(i)+'.h5',custom_objects={'CustomMaskLayer': CustomMaskLayer})
  # resnet_model = load_model('best_model_20.h5', custom_objects={'CustomMaskLayer': CustomMaskLayer})
  ###########
  ###############
 
  predicted=resnet_model.predict(X_test[start_test:end_test])
- print('Results of NSL dataset with Resnet only ')
+ print('Results of CICIDS2017 dataset with Resnet only ')
  predicted3 = predicted.round().astype(int)
  with open(file_name, "a") as file:
      file.write(f"node {i+1}:\n")
@@ -356,7 +396,7 @@ for i in range(nodes):
  ############
  print('Trainging with GradientBoostingClassifier')
  with open(file_name, "a") as file:
-     file.write("Results of NSL dataset with GradientBoostingClassifier only \n")  # 
+     file.write("Results of CICIDS2017 dataset with GradientBoostingClassifier only \n")  # 
  classifier.fit(features_train, y_train[start:end])
 
  y_pred_classifier = classifier.predict(features_test)
@@ -365,7 +405,7 @@ for i in range(nodes):
  ############
  print('Trainging with BaggingClassifier')
  with open(file_name, "a") as file:
-     file.write("Results of NSL dataset with BaggingClassifier only \n")  # 
+     file.write("Results of CICIDS2017 dataset with BaggingClassifier only \n")  # 
  classifier2.fit(features_train, y_train[start:end])
 
  y_pred_classifier = classifier2.predict(features_test)
@@ -374,7 +414,7 @@ for i in range(nodes):
  ############
  print('Trainging with DecisionTreeClassifier')
  with open(file_name, "a") as file:
-     file.write("Results of NSL dataset with DecisionTreeClassifier only \n")  # 
+     file.write("Results of CICIDS2017 dataset with DecisionTreeClassifier only \n")  # 
  classifier3.fit(features_train, y_train[start:end])
 
  y_pred_classifier = classifier3.predict(features_test)
@@ -387,11 +427,3 @@ for i in range(nodes):
 # file.close()
 
 ################ end for
-################
-
-
-
-
-
-
-
