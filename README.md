@@ -4,6 +4,12 @@
  1- SDN dataset is already in the repositry.<br />
  2- Download the NSL-KDD dataset from https://www.kaggle.com/datasets/hassan06/nslkdd  <br />
  3- Download the CICIDS2017 dataset from https://www.kaggle.com/datasets/dhoogla/cicids2017 <br />
+ To run phase one, run the following code. <br />
+ phase1_ddos_sdn.py  (for SDN dataset). <br />
+ phase1_nsl.py  (for NSL dataset). <br />
+ phase1_CICIDS2017.py   (for CICIDS2017 dataset). <br />
+
+ 
  To run the phase two for each dataset, run the following code. <br />
  resnet_sdn_split.py  (for SDN dataset). <br />
  resnet_nsl_split.py  (for NSL dataset). <br />
